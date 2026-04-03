@@ -16,7 +16,7 @@
 #
 # Optional:
 #   WIPE_ALL_DISKS=1 - Wipe all block devices before imaging
-#   POWEROFF=1       - Poweroff instead of reboot when done
+#   SNAPSHOT=1       - Poweroff instead of reboot when done (for VM snapshots)
 #
 
 wipe_disk() {
@@ -133,7 +133,7 @@ done
 sync
 echo "==> Installation complete"
 
-if [ "$POWEROFF" = "1" ]; then
+if [ "$SNAPSHOT" = "1" ]; then
 	poweroff -f
 else
 	reboot -f

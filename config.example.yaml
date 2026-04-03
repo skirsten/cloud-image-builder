@@ -18,9 +18,10 @@ takeover:
   boot_cmdline: "iommu.passthrough=1"
   # Wipe (blkdiscard) all block devices before writing the image
   wipe_all_disks: true
-  # Poweroff after install instead of reboot.
-  # Use reboot (false) for bare metal, poweroff (true) for snapshotting VMs.
-  poweroff: true
+  # Snapshot mode: poweroff after install instead of reboot, and skip
+  # cloud-init datasource and netplan setup so the image stays vanilla.
+  # Use for snapshotting VMs. For bare metal, leave false.
+  snapshot: true
   # Optional: set up RAID1 instead of single-disk mode
   # raid: auto                            # auto-detect NVMe pair
   # raid_max_size_tb: 2                   # required for auto: max disk size in TB

@@ -23,8 +23,8 @@ wipe_all_disks: true
 # Extra kernel cmdline parameters for GRUB on the installed OS
 boot_cmdline: "iommu.passthrough=1"
 
-# Poweroff after install instead of reboot
-poweroff: false
+# Snapshot mode: poweroff after install instead of reboot
+snapshot: false
 
 # Per-node overrides. Each node needs at least a netplan config.
 nodes:

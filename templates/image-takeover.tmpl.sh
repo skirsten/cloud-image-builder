@@ -1,9 +1,7 @@
+{{- /* This is a gomplate template. Render it with: just render-takeover */ -}}
 #!/bin/bash
 #
 # Reimage a running machine via kexec into a minimal Alpine rescue environment.
-#
-# This is a gomplate template. Render it with:
-#   just render-takeover
 #
 set -eo pipefail
 
@@ -44,6 +42,14 @@ tar xf rescue.tar.gz -C rescue
 echo "Downloading replacement image from $REPLACEMENT_IMAGE"
 wget -q "$REPLACEMENT_IMAGE" -O /replacement.img
 
+IMAGE_SIZE=$(stat -c %s /replacement.img)
+AVAIL_MEM=$(awk '/^MemAvailable:/ { print $2 * 1024 }' /proc/meminfo)
+if [ "$IMAGE_SIZE" -gt "$AVAIL_MEM" ]; then
+	echo "ERROR: replacement image ($(numfmt --to=iec "$IMAGE_SIZE")) exceeds available memory ($(numfmt --to=iec "$AVAIL_MEM"))"
+	echo "The image will be copied to a tmpfs after kexec and must fit in RAM."
+	exit 1
+fi
+
 systemd-nspawn -D rescue /sbin/apk add bash lsblk blkid qemu-img mdadm util-linux parted --update-cache
 
 OLD_ROOT_PART=$(findmnt --noheadings --output SOURCE --mountpoint /)
@@ -70,6 +76,7 @@ echo "RAID1 mode: $RAID_DISK1 + $RAID_DISK2"
 # {{- end }}
 
 mkdir rescue/overlay
+# {{- if not (and (has .takeover "snapshot") .takeover.snapshot) }}
 
 mkdir -p rescue/overlay/etc/cloud/cloud.cfg.d
 
@@ -95,6 +102,7 @@ sed -i "s/INSTANCE_ID_PLACEHOLDER/iid-$(openssl rand -hex 8)/" \
 # Preserve existing network config
 mkdir -p rescue/overlay/etc/netplan
 netplan get >rescue/overlay/etc/netplan/52-network.yaml
+# {{- end }}
 # {{- if .takeover.boot_cmdline }}
 
 mkdir -p rescue/overlay/etc/default/grub.d
@@ -108,11 +116,11 @@ INSTALL_SH
 chmod +x rescue/install-to-disk.sh
 
 cat <<'INSTALLER_ENV' >rescue/installer.env
-{{- if .takeover.wipe_all_disks }}
+{{- if and (has .takeover "wipe_all_disks") .takeover.wipe_all_disks }}
 WIPE_ALL_DISKS=1
 {{- end }}
-{{- if .takeover.poweroff }}
-POWEROFF=1
+{{- if and (has .takeover "snapshot") .takeover.snapshot }}
+SNAPSHOT=1
 {{- end }}
 {{- if (has .takeover "raid") }}
 {{- if eq (printf "%v" .takeover.raid) "auto" }}

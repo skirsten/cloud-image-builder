@@ -88,7 +88,7 @@ def resolve_node(cfg, hostname):
         "http_server": get("http_server"),
         "boot_cmdline": get("boot_cmdline", required=False) or "",
         "wipe_all_disks": bool(get("wipe_all_disks", required=False)),
-        "poweroff": bool(get("poweroff", required=False)),
+        "snapshot": bool(get("snapshot", required=False)),
     }
 
 
@@ -347,7 +347,7 @@ def build_node(node, boot, chroot, workdir, output_root):
             raid_auto=1 if disk_cfg["mode"] == "auto" else "",
             raid_max_sectors=max_sectors,
             wipe_all_disks=1 if node["wipe_all_disks"] else "",
-            poweroff=1 if node["poweroff"] else "",
+            snapshot=1 if node["snapshot"] else "",
         )
     )
 
