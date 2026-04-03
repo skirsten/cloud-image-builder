@@ -1,0 +1,46 @@
+# iPXE installer configuration.
+# Copy to config.yaml and fill in your values.
+
+# URL of the qcow2 OS image to install
+image: "http://your-http-server/cloudimg-amd64.qcow2"
+
+# HTTP server address serving the iPXE boot files (the output/ directory)
+http_server: your-http-server
+
+# SSH public keys to authorize on installed nodes
+ssh_keys:
+  - ssh-ed25519 AAAA... user@host
+
+# Disk configuration. Options:
+#   disk: /dev/sda                          - single disk
+#   disk: { raid: [/dev/sda, /dev/sdb] }    - explicit RAID1
+#   disk: { raid: auto, max_size_tb: 2 }    - auto-detect NVMe pair
+disk: { raid: auto, max_size_tb: 2 }
+
+# Wipe (blkdiscard) all block devices before writing the image
+wipe_all_disks: true
+
+# Extra kernel cmdline parameters for GRUB on the installed OS
+boot_cmdline: "iommu.passthrough=1"
+
+# Poweroff after install instead of reboot
+poweroff: false
+
+# Per-node overrides. Each node needs at least a netplan config.
+nodes:
+  example-node-1:
+    netplan:
+      network:
+        version: 2
+        renderer: networkd
+        ethernets:
+          eth0:
+            addresses:
+              - 192.168.1.10/24
+            routes:
+              - to: default
+                via: 192.168.1.1
+            nameservers:
+              addresses:
+                - 1.1.1.1
+                - 8.8.8.8

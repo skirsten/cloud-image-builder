@@ -1,0 +1,5 @@
+#cloud-config
+
+hostname: temp-{{ random.String 8 "[a-f0-9]" }}
+
+{{ .cloud_init | strings.TrimPrefix "#cloud-config" | strings.TrimSpace }}

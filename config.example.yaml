@@ -1,0 +1,27 @@
+# Cloud-init userdata applied to the installed OS.
+# Used by both the test login template and the image-takeover template.
+cloud_init: |
+  #cloud-config
+
+  ssh_authorized_keys:
+    - ssh-ed25519 AAAA... user@host
+
+  ssh:
+    emit_keys_to_console: false
+
+# Settings for the image-takeover script (templates/image-takeover.tmpl.sh).
+# Reimages a running machine via kexec into a minimal Alpine rescue environment.
+takeover:
+  # URL of a built qcow2 image (from output/) uploaded to an HTTP server
+  image: https://example.com/cloudimg-amd64.qcow2
+  # Extra kernel cmdline parameters written to GRUB on the installed OS
+  boot_cmdline: "iommu.passthrough=1"
+  # Wipe (blkdiscard) all block devices before writing the image
+  wipe_all_disks: true
+  # Poweroff after install instead of reboot.
+  # Use reboot (false) for bare metal, poweroff (true) for snapshotting VMs.
+  poweroff: true
+  # Optional: set up RAID1 instead of single-disk mode
+  # raid: auto                            # auto-detect NVMe pair
+  # raid_max_size_tb: 2                   # required for auto: max disk size in TB
+  # raid: [/dev/nvme0n1, /dev/nvme1n1]   # or specify explicit disk pair

@@ -1,0 +1,5 @@
+#!ipxe
+
+kernel {base_url}/vmlinuz-lts initrd=initramfs-lts console=tty0 console=ttyS0,115200n8 {ip_param} modules=loop,squashfs alpine_repo=https://dl-cdn.alpinelinux.org/alpine/v{alpine_version}/main modloop={base_url}/modloop-lts apkovl={base_url}/{hostname}/overlay.tar.gz
+initrd {base_url}/initramfs-lts
+boot
