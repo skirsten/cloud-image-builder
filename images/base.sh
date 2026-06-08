@@ -3,9 +3,11 @@
 set -eo pipefail -o xtrace
 
 # Important: DKMS installation (e.g. NVIDIA driver) will often not detect the chroot or just hang.
-# So for now we only support building on the same kernel as the chroot:
-
-dpkg-query -W -f='${binary:Package}\n' linux-image-* | head -n 1 | sed 's/linux-image-//' | grep -q $(uname -r)
+# So for now we only support building on the same kernel as the chroot.
+# In MAAS mode this runs in a full VM (not a chroot), and packer-maas removes the running kernel before our customize script.
+if [ -z "$MAAS_BUILD" ]; then
+	dpkg-query -W -f='${binary:Package}\n' linux-image-* | head -n 1 | sed 's/linux-image-//' | grep -q $(uname -r)
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -36,7 +38,9 @@ apt-get upgrade -y
 # apt-get remove -y linux-virtual linux-image-virtual
 # apt-get autoremove -y
 
-apt-get install -y linux-image-generic
+if [ -z "$MAAS_BUILD" ]; then
+	apt-get install -y linux-image-generic
+fi
 
 # Install base packages
 
@@ -70,10 +74,16 @@ ufw allow ssh/tcp
 # ufw allow from 172.16.0.0/12
 # ufw allow from 192.168.0.0/16
 
-ufw --force enable
+if [ -n "$MAAS_BUILD" ]; then
+	sed -i 's/^ENABLED=no/ENABLED=yes/' /etc/ufw/ufw.conf
+else
+	ufw --force enable
+fi
 
-# Bake md modules into initramfs (needed for RAID1 boot)
-update-initramfs -u -k all
+# Bake md modules into initramfs (needed for RAID1 boot).
+if dpkg-query -W -f='${binary:Package}\n' 'linux-image-*' 2>/dev/null | grep -q .; then
+	update-initramfs -u -k all
+fi
 
 # Report
 

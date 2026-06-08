@@ -19,6 +19,26 @@ build-nvidia-gpu:
 build-nvidia-ml:
     ./build.py nvidia-ml
 
+# Build all MAAS-compatible images (tar.gz, filetype=tgz) via packer-maas
+build-maas-all:
+    ./maas/build.py --all
+
+# Build MAAS base image
+build-maas-base:
+    ./maas/build.py base
+
+# Build MAAS nvidia-gpu image
+build-maas-nvidia-gpu:
+    ./maas/build.py nvidia-gpu
+
+# Build MAAS nvidia-ml image
+build-maas-nvidia-ml:
+    ./maas/build.py nvidia-ml
+
+# Upload a built MAAS image to a MAAS server (requires $MAAS_API_URL and $MAAS_API_KEY)
+upload-maas image:
+    ./maas/upload.py {{image}}
+
 # Boot a built image in QEMU for testing
 test image:
     #!/usr/bin/env bash

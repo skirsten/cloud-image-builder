@@ -3,9 +3,11 @@
 set -eo pipefail -o xtrace
 
 # Important: DKMS installation (e.g. NVIDIA driver) will often not detect the chroot or just hang.
-# So for now we only support building on the same kernel as the chroot:
-
-dpkg-query -W -f='${binary:Package}\n' linux-image-* | head -n 1 | sed 's/linux-image-//' | grep -q $(uname -r)
+# So for now we only support building on the same kernel as the chroot.
+# In MAAS mode this runs in a full VM and the wrapper installs the kernel itself.
+if [ -z "$MAAS_BUILD" ]; then
+	dpkg-query -W -f='${binary:Package}\n' linux-image-* | head -n 1 | sed 's/linux-image-//' | grep -q $(uname -r)
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
