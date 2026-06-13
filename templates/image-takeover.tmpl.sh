@@ -7,6 +7,11 @@ set -eo pipefail
 
 REPLACEMENT_IMAGE={{ .takeover.image | quote }}
 RESCUE_ROOTFS="https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-minirootfs-3.23.2-x86_64.tar.gz"
+# {{- if and (has .takeover "staging_disk") .takeover.staging_disk }}
+STAGING_DISK={{ .takeover.staging_disk | quote }}
+# {{- else }}
+STAGING_DISK=""
+# {{- end }}
 
 cd $(mktemp -d -p /dev/shm)
 
@@ -39,15 +44,34 @@ wget -q "$RESCUE_ROOTFS" -O rescue.tar.gz
 mkdir rescue
 tar xf rescue.tar.gz -C rescue
 
-echo "Downloading replacement image from $REPLACEMENT_IMAGE"
-wget -q "$REPLACEMENT_IMAGE" -O /replacement.img
+if [ -n "$STAGING_DISK" ]; then
+	# Stage the image on a separate disk so it does not have to fit in RAM.
+	if [ ! -b "$STAGING_DISK" ]; then
+		echo "ERROR: staging disk $STAGING_DISK is not a block device"
+		exit 1
+	fi
 
-IMAGE_SIZE=$(stat -c %s /replacement.img)
-AVAIL_MEM=$(awk '/^MemAvailable:/ { print $2 * 1024 }' /proc/meminfo)
-if [ "$IMAGE_SIZE" -gt "$AVAIL_MEM" ]; then
-	echo "ERROR: replacement image ($(numfmt --to=iec "$IMAGE_SIZE")) exceeds available memory ($(numfmt --to=iec "$AVAIL_MEM"))"
-	echo "The image will be copied to a tmpfs after kexec and must fit in RAM."
-	exit 1
+	# The staging disk must be ext4: it is built into the kernel, so the rescue
+	# initramfs (which ships no modules) can mount it. Other filesystems (xfs,
+	# btrfs, ...) are loadable modules and are not available there.
+	echo "Staging replacement image on $STAGING_DISK"
+	STAGING_MNT=$(mktemp -d)
+	mount "$STAGING_DISK" "$STAGING_MNT"
+	wget -q "$REPLACEMENT_IMAGE" -O "$STAGING_MNT/replacement.img"
+	umount "$STAGING_MNT"
+	rmdir "$STAGING_MNT"
+else
+	echo "Downloading replacement image from $REPLACEMENT_IMAGE"
+	wget -q "$REPLACEMENT_IMAGE" -O /replacement.img
+
+	IMAGE_SIZE=$(stat -c %s /replacement.img)
+	AVAIL_MEM=$(awk '/^MemAvailable:/ { print $2 * 1024 }' /proc/meminfo)
+	if [ "$IMAGE_SIZE" -gt "$AVAIL_MEM" ]; then
+		echo "ERROR: replacement image ($(numfmt --to=iec "$IMAGE_SIZE")) exceeds available memory ($(numfmt --to=iec "$AVAIL_MEM"))"
+		echo "The image will be copied to a tmpfs after kexec and must fit in RAM."
+		echo "Set takeover.staging_disk to stage the image on a separate disk instead."
+		exit 1
+	fi
 fi
 
 systemd-nspawn -D rescue /sbin/apk add bash lsblk blkid qemu-img mdadm util-linux parted --update-cache
@@ -116,6 +140,9 @@ INSTALL_SH
 chmod +x rescue/install-to-disk.sh
 
 cat <<'INSTALLER_ENV' >rescue/installer.env
+{{- if and (has .takeover "staging_disk") .takeover.staging_disk }}
+STAGING_DISK={{ .takeover.staging_disk | quote }}
+{{- end }}
 {{- if and (has .takeover "wipe_all_disks") .takeover.wipe_all_disks }}
 WIPE_ALL_DISKS=1
 {{- end }}
@@ -153,15 +180,25 @@ mount -t tmpfs tmpfs /tmp # backed by memory
 
 ip link set up dev lo
 
+. /installer.env
+
 partprobe $ROOT_DEV
 lsblk
 
-mount -o ro $OLD_ROOT_PART /mnt
-cp /mnt/replacement.img /tmp/replacement.img
-umount /mnt
+if [ -n "$STAGING_DISK" ]; then
+  # Read the image directly from the staging disk (survives the wipe because
+  # it lives on a different disk than the target).
+  mkdir -p /staging
+  mount "$STAGING_DISK" /staging
+  export IMAGE_PATH=/staging/replacement.img
+else
+  # Copy the image off the about-to-be-wiped old root into tmpfs.
+  mount -o ro $OLD_ROOT_PART /mnt
+  cp /mnt/replacement.img /tmp/replacement.img
+  umount /mnt
+  export IMAGE_PATH=/tmp/replacement.img
+fi
 
-. /installer.env
-export IMAGE_PATH=/tmp/replacement.img
 export OVERLAY_DIR=/overlay
 export TARGET_DISK=$ROOT_DEV
 

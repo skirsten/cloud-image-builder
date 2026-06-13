@@ -17,6 +17,9 @@
 # Optional:
 #   WIPE_ALL_DISKS=1 - Wipe all block devices before imaging
 #   SNAPSHOT=1       - Poweroff instead of reboot when done (for VM snapshots)
+#   STAGING_DISK     - Disk/partition the image is read from; its parent disk is
+#                      excluded from wiping and RAID auto-detect, and must not be
+#                      the target disk.
 #
 
 wipe_disk() {
@@ -26,9 +29,25 @@ wipe_disk() {
 	blkdiscard "$1" || true
 }
 
+# Resolve the parent disk of the staging device so it is never wiped or used
+# as a RAID member. A whole disk has no PKNAME, so it is its own parent.
+STAGING_PARENT=""
+if [ -n "$STAGING_DISK" ]; then
+	_sp=$(lsblk -dno PKNAME "$STAGING_DISK" 2>/dev/null)
+	if [ -n "$_sp" ]; then
+		STAGING_PARENT="/dev/$_sp"
+	else
+		STAGING_PARENT="$STAGING_DISK"
+	fi
+fi
+
 if [ "$WIPE_ALL_DISKS" = "1" ]; then
 	echo "==> Discarding all block devices"
 	for dev in $(lsblk -dnpo NAME,TYPE | awk '$2 == "disk" {print $1}'); do
+		if [ -n "$STAGING_PARENT" ] && [ "$dev" = "$STAGING_PARENT" ]; then
+			echo "    skipping staging disk $dev"
+			continue
+		fi
 		echo "    wiping $dev"
 		wipe_disk "$dev"
 	done
@@ -40,6 +59,7 @@ if [ "$RAID_AUTO" = "1" ]; then
 	RAID_DISK2=""
 	for dev in /dev/nvme*n1; do
 		[ -b "$dev" ] || continue
+		[ -n "$STAGING_PARENT" ] && [ "$dev" = "$STAGING_PARENT" ] && continue
 		SIZE=$(cat /sys/block/$(basename "$dev")/size)
 		if [ "$SIZE" -lt "$RAID_MAX_SECTORS" ]; then
 			if [ -z "$RAID_DISK1" ]; then
@@ -59,6 +79,10 @@ if [ "$RAID_AUTO" = "1" ]; then
 fi
 
 if [ -n "$RAID_DISK1" ] && [ -n "$RAID_DISK2" ]; then
+	if [ -n "$STAGING_PARENT" ] && { [ "$RAID_DISK1" = "$STAGING_PARENT" ] || [ "$RAID_DISK2" = "$STAGING_PARENT" ]; }; then
+		echo "ERROR: staging disk ($STAGING_PARENT) is also a RAID target; use a different disk"
+		exit 1
+	fi
 	echo "==> Setting up RAID1: $RAID_DISK1 + $RAID_DISK2"
 	wipe_disk "$RAID_DISK1"
 	wipe_disk "$RAID_DISK2"
@@ -66,6 +90,10 @@ if [ -n "$RAID_DISK1" ] && [ -n "$RAID_DISK2" ]; then
 		--run "$RAID_DISK1" "$RAID_DISK2"
 	TARGET_DEV=/dev/md0
 else
+	if [ -n "$STAGING_PARENT" ] && [ "$TARGET_DISK" = "$STAGING_PARENT" ]; then
+		echo "ERROR: staging disk ($STAGING_PARENT) is also the target disk; use a different disk"
+		exit 1
+	fi
 	echo "==> Single-disk mode: $TARGET_DISK"
 	wipe_disk "$TARGET_DISK"
 	TARGET_DEV="$TARGET_DISK"

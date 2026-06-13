@@ -26,3 +26,10 @@ takeover:
   # raid: auto                            # auto-detect NVMe pair
   # raid_max_size_tb: 2                   # required for auto: max disk size in TB
   # raid: [/dev/nvme0n1, /dev/nvme1n1]   # or specify explicit disk pair
+  # Optional: stage the image on a separate disk/volume instead of RAM.
+  # The image is downloaded onto this disk before kexec and read from it
+  # during install, so it no longer has to fit in available memory.
+  # Must be an ext4 block device on a DIFFERENT physical disk than the one
+  # being reimaged (ext4 is built into the kernel; the rescue environment
+  # cannot mount xfs/btrfs/etc.).
+  # staging_disk: /dev/sdb1
